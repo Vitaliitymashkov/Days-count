@@ -3,7 +3,7 @@ Prompt (spec) for a code generator: SPA in JavaScript to track days absent in Po
 Below is a ready prompt that can be pasted into a code generator / sent to a developer / used with ChatGPT to produce a working single-page web app. The application must run as a static site (GitHub Pages) without a backend; default data storage is localStorage and optional S3 integration is described separately.
 
 Copy the entire block below and paste it into the code generator (or send to a developer).
-'''
+```
 Task
 ---
 Create a single-page web application (SPA) using plain JavaScript (no bundler / no backend) that can be hosted as a static site (for example on GitHub Pages). The app should allow tracking people's trips (exit from Poland and return to Poland), store multiple people and their trips, and compute the total number of absent days in Poland for a given period.
@@ -115,7 +115,7 @@ Code/style requests
 - Provide user-friendly error messages for invalid dates (return < exit, etc.).
 
 End of prompt
----
+```
 
 :
   1. Generate a ready-to-run index.html (vanilla JS) based on this prompt here — a file you can deploy to GitHub Pages.
