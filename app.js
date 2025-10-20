@@ -57,9 +57,9 @@ function renderPeopleList(){ const container = document.getElementById('peopleLi
     left.appendChild(name); left.appendChild(meta);
     const right=document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
 
-    const selectBtn=document.createElement('button'); selectBtn.className='ghost'; selectBtn.textContent='Выбрать'; selectBtn.onclick=()=>{ selectedPersonId=p.id; renderTripsForSelected(); }
-    const editBtn=document.createElement('button'); editBtn.className='ghost'; editBtn.textContent='Изменить'; editBtn.onclick=()=>{ const newName=prompt('Новое имя', p.name); if(newName){ p.name=newName; saveState(); }}
-    const delBtn=document.createElement('button'); delBtn.className='ghost'; delBtn.textContent='Удалить'; delBtn.onclick=()=>{ if(confirm('Удалить '+p.name+'?')){ state.people = state.people.filter(x=>x.id!==p.id); if(selectedPersonId===p.id) selectedPersonId=null; saveState(); renderAll(); } }
+    const selectBtn=document.createElement('button'); selectBtn.className='ghost'; selectBtn.textContent=t('btns.select'); selectBtn.onclick=()=>{ selectedPersonId=p.id; renderTripsForSelected(); }
+    const editBtn=document.createElement('button'); editBtn.className='ghost'; editBtn.textContent=t('btns.edit'); editBtn.onclick=()=>{ const newName=prompt(t('alerts.enterName'), p.name); if(newName){ p.name=newName; saveState(); }}
+    const delBtn=document.createElement('button'); delBtn.className='ghost'; delBtn.textContent=t('btns.delete'); delBtn.onclick=()=>{ if(confirm(t('alerts.deletePersonConfirm',{name:p.name}))){ state.people = state.people.filter(x=>x.id!==p.id); if(selectedPersonId===p.id) selectedPersonId=null; saveState(); renderAll(); } }
 
     right.appendChild(selectBtn); right.appendChild(editBtn); right.appendChild(delBtn);
 
@@ -70,81 +70,23 @@ function renderPeopleList(){ const container = document.getElementById('peopleLi
 
 function renderTripsForSelected(){ const header=document.getElementById('personHeader'); const tripsArea=document.getElementById('tripsArea'); const tableBody=document.querySelector('#tripsTable tbody');
   const person = state.people.find(x=>x.id===selectedPersonId);
-  if(!person){ tripsArea.style.display='none'; header.textContent='Выберите человека слева'; return; }
-  header.textContent = person.name + ' — поездки'; tripsArea.style.display='block'; tableBody.innerHTML='';
+  if(!person){ tripsArea.style.display='none'; header.textContent=t('personHeaderChoose'); return; }
+  header.textContent = person.name + ' — ' + t('personHeaderChoose'); tripsArea.style.display='block'; tableBody.innerHTML='';
   (person.trips || []).forEach(t=>{
     const tr=document.createElement('tr');
     const tdExit=document.createElement('td'); tdExit.textContent = t.exit || '-';
     const tdReturn=document.createElement('td'); tdReturn.textContent = t.return || '-';
     const tdNote=document.createElement('td'); tdNote.textContent = t.note || '';
     const tdAct=document.createElement('td'); tdAct.className='trip-actions';
-    const editBtn=document.createElement('button'); editBtn.className='ghost small'; editBtn.textContent='Изм'; editBtn.onclick=()=>{ const newExit=prompt('Дата выезда (YYYY-MM-DD)', t.exit||''); const newReturn=prompt('Дата возвращения (YYYY-MM-DD или пусто)', t.return||''); if(newExit){ t.exit=newExit; t.return=newReturn||null; saveState(); renderTripsForSelected(); } }
-    const delBtn=document.createElement('button'); delBtn.className='ghost small'; delBtn.textContent='Del'; delBtn.onclick=()=>{ if(confirm('Удалить поездку?')){ person.trips = person.trips.filter(x=>x.id!==t.id); saveState(); renderTripsForSelected(); } }
+    const editBtn=document.createElement('button'); editBtn.className='ghost small'; editBtn.textContent=t('btns.editShort'); editBtn.onclick=()=>{ const newExit=prompt(t('alerts.enterExitDate'), t.exit||''); const newReturn=prompt(t('thReturn')+' (YYYY-MM-DD or empty)', t.return||''); if(newExit){ t.exit=newExit; t.return=newReturn||null; saveState(); renderTripsForSelected(); } }
+    const delBtn=document.createElement('button'); delBtn.className='ghost small'; delBtn.textContent=t('btns.delShort'); delBtn.onclick=()=>{ if(confirm(t('alerts.deleteTripConfirm'))){ person.trips = person.trips.filter(x=>x.id!==t.id); saveState(); renderTripsForSelected(); } }
     tdAct.appendChild(editBtn); tdAct.appendChild(delBtn);
     tr.appendChild(tdExit); tr.appendChild(tdReturn); tr.appendChild(tdNote); tr.appendChild(tdAct);
     tableBody.appendChild(tr);
   });
 }
 
-function renderAll(){ renderPeopleList(); renderTripsForSelected(); renderResults(); }
-
-function getPeriod(){
-  const d1 = document.getElementById('date1').value;
-  const d2 = document.getElementById('date2').value;
-  const includeReturn = document.getElementById('includeReturn').checked;
-  const end = parseISO(d1) || new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
-  const start = parseISO(d2) || new Date(Date.UTC(end.getUTCFullYear()-5, end.getUTCMonth(), end.getUTCDate()));
-  return { start, end, includeReturn };
-}
-
-// compute absent intervals for a person's trips within period
-// returns { totalDays, intervals: [[startDate, endExclusiveDate], ...], details: [{tripId, usedStart, usedEndExclusive, days, note}, ...] }
-function computeAbsentForPerson(person, period){
-  const msPerDay = 86400000;
-  const intervalStart = period.start;
-  const intervalEndExclusive = new Date(Date.UTC(period.end.getUTCFullYear(), period.end.getUTCMonth(), period.end.getUTCDate()) + msPerDay);
-
-  const intervals = [];
-  const details = [];
-
-  (person.trips || []).forEach(t=>{
-    if(!t.exit) return; // invalid
-    const exitDate = parseISO(t.exit);
-    if(!exitDate) return;
-    // determine trip return date object (if null -> treat as period.end)
-    const rawReturn = t.return ? parseISO(t.return) : null;
-    // make return exclusive depending on includeReturn: if includeReturn true -> make returnExclusive = return + 1 day, else returnExclusive = return
-    // if return is null -> we consider return = period.end (inclusive), so exclusive = period.end + 1 day
-    let returnExclusive;
-    if(rawReturn){
-      returnExclusive = period.includeReturn ? new Date(Date.UTC(rawReturn.getUTCFullYear(), rawReturn.getUTCMonth(), rawReturn.getUTCDate()) + msPerDay)
-                                            : new Date(Date.UTC(rawReturn.getUTCFullYear(), rawReturn.getUTCMonth(), rawReturn.getUTCDate()));
-    } else {
-      // not returned -> consider return at period.end (inclusive) -> exclusive is period.end + 1 day
-      returnExclusive = new Date(Date.UTC(period.end.getUTCFullYear(), period.end.getUTCMonth(), period.end.getUTCDate()) + msPerDay);
-    }
-
-    // effective intersection with calculation interval: [max(exit, intervalStart), min(returnExclusive, intervalEndExclusive))
-    const effStart = (Date.UTC(exitDate.getUTCFullYear(),exitDate.getUTCMonth(),exitDate.getUTCDate()) < Date.UTC(intervalStart.getUTCFullYear(),intervalStart.getUTCMonth(),intervalStart.getUTCDate()))
-                     ? intervalStart : exitDate;
-    const effEnd = (Date.UTC(returnExclusive.getUTCFullYear(),returnExclusive.getUTCMonth(),returnExclusive.getUTCDate()) > Date.UTC(intervalEndExclusive.getUTCFullYear(),intervalEndExclusive.getUTCMonth(),intervalEndExclusive.getUTCDate()))
-                   ? intervalEndExclusive : returnExclusive;
-
-    const days = daysBetweenUTC(effStart, effEnd);
-    if(days > 0){
-      intervals.push([effStart, effEnd]);
-      details.push({ tripId: t.id, usedStart: effStart, usedEndExclusive: effEnd, days, note: t.note || '' });
-    }
-  });
-
-  // merge intervals to avoid double counting
-  const merged = mergeIntervals(intervals);
-  // sum days from merged intervals
-  const totalDays = merged.reduce((sum, [s,e]) => sum + Math.max(0, daysBetweenUTC(s,e)), 0);
-
-  return { totalDays, intervals: merged, details };
-}
-
+// renderResults uses translated headers
 function renderResults(){
   const resultsEl = document.getElementById('results');
   resultsEl.innerHTML = '';
@@ -153,11 +95,11 @@ function renderResults(){
   const ruleDiv = document.createElement('div');
   ruleDiv.className = 'muted small';
   ruleDiv.style.marginBottom = '8px';
-  ruleDiv.textContent = `Период: ${isoDate(period.start)} — ${isoDate(period.end)}. День возвращения ${period.includeReturn ? 'включается' : 'не включается'} в отсутствие.`;
+  ruleDiv.textContent = `Period: ${isoDate(period.start)} — ${isoDate(period.end)}. Return day ${period.includeReturn ? 'is included' : 'is not included'} in absence.`;
   resultsEl.appendChild(ruleDiv);
 
   if(!state.people || state.people.length === 0){
-    resultsEl.appendChild(Object.assign(document.createElement('div'), { textContent: 'Нет людей — добавьте.' }));
+    resultsEl.appendChild(Object.assign(document.createElement('div'), { textContent: 'No people — add one.' }));
     return;
   }
 
@@ -165,7 +107,7 @@ function renderResults(){
   table.className = 'result-table';
   const thead = document.createElement('thead');
   const headRow = document.createElement('tr');
-  ['Человек','Дней отсутствия','Детали'].forEach(h=>{
+  t('tableHeaders').forEach(h=>{
     const th = document.createElement('th'); th.textContent = h; headRow.appendChild(th);
   });
   thead.appendChild(headRow);
@@ -178,7 +120,7 @@ function renderResults(){
     const compute = computeAbsentForPerson(p, period);
     const tdDays = document.createElement('td'); tdDays.textContent = compute.totalDays;
     const tdDetails = document.createElement('td');
-    const detailsBtn = document.createElement('button'); detailsBtn.className='ghost small'; detailsBtn.textContent='Показать';
+    const detailsBtn = document.createElement('button'); detailsBtn.className='ghost small'; detailsBtn.textContent=t('btns.show');
     detailsBtn.onclick = ()=> showDetails(p.id, compute);
     tdDetails.appendChild(detailsBtn);
 
@@ -190,30 +132,28 @@ function renderResults(){
   resultsEl.appendChild(table);
 }
 
-// renders detail panel for a person (in #details)
+// showDetails uses translations for headings/columns
 function showDetails(personId, computeData){
   const detailsEl = document.getElementById('details');
   detailsEl.innerHTML = '';
   const person = state.people.find(p=>p.id === personId);
-  if(!person){ detailsEl.textContent = 'Человек не найден'; return; }
+  if(!person){ detailsEl.textContent = t('peopleHeading') + ' not found'; return; }
 
-  const title = document.createElement('h4'); title.textContent = person.name + ' — детализация';
+  const title = document.createElement('h4'); title.textContent = person.name + ' — ' + t('details.totalDays') ;
   detailsEl.appendChild(title);
 
-  const total = document.createElement('div'); total.textContent = 'Суммарно дней: ' + computeData.totalDays; total.className='muted';
+  const total = document.createElement('div'); total.textContent = t('details.totalDays') + ' ' + computeData.totalDays; total.className='muted';
   detailsEl.appendChild(total);
 
-  // merged intervals
-  const mergedTitle = document.createElement('div'); mergedTitle.textContent = 'Объединённые интервалы, учтённые в сумме:';
+  const mergedTitle = document.createElement('div'); mergedTitle.textContent = t('details.mergedIntervalsTitle');
   mergedTitle.style.marginTop = '8px';
   detailsEl.appendChild(mergedTitle);
   const mtable = document.createElement('table'); mtable.className='result-table';
-  const mh = document.createElement('thead'); mh.innerHTML = '<tr><th>С</th><th>До (включительно)</th><th>Дней</th></tr>'; mtable.appendChild(mh);
+  const mh = document.createElement('thead'); mh.innerHTML = `<tr><th>${t('details.columnsMerged.0')}</th><th>${t('details.columnsMerged.1')}</th><th>${t('details.columnsMerged.2')}</th></tr>`; mtable.appendChild(mh);
   const mb = document.createElement('tbody');
   computeData.intervals.forEach(([s,e])=>{
     const tr = document.createElement('tr');
     const tdS = document.createElement('td'); tdS.textContent = isoDate(s);
-    // to display inclusive end date: subtract 1 day from exclusive end
     const endInclusive = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()) - 86400000);
     const tdE = document.createElement('td'); tdE.textContent = isoDate(endInclusive);
     const tdDays = document.createElement('td'); tdDays.textContent = daysBetweenUTC(s,e);
@@ -223,12 +163,11 @@ function showDetails(personId, computeData){
   mtable.appendChild(mb);
   detailsEl.appendChild(mtable);
 
-  // per-trip contributions
-  const contribTitle = document.createElement('div'); contribTitle.textContent = 'Вклад отдельных поездок (учтённая часть):';
+  const contribTitle = document.createElement('div'); contribTitle.textContent = t('details.perTripTitle');
   contribTitle.style.marginTop = '8px';
   detailsEl.appendChild(contribTitle);
   const ctable = document.createElement('table'); ctable.className='result-table';
-  const ch = document.createElement('thead'); ch.innerHTML = '<tr><th>Выезд</th><th>Возврат</th><th>Учтённый период</th><th>Дней</th><th>Заметка</th></tr>'; ctable.appendChild(ch);
+  const ch = document.createElement('thead'); ch.innerHTML = `<tr><th>${t('details.columnsPerTrip.0')}</th><th>${t('details.columnsPerTrip.1')}</th><th>${t('details.columnsPerTrip.2')}</th><th>${t('details.columnsPerTrip.3')}</th><th>${t('details.columnsPerTrip.4')}</th></tr>`; ctable.appendChild(ch);
   const cb = document.createElement('tbody');
   computeData.details.forEach(d=>{
     const tr = document.createElement('tr');
@@ -246,9 +185,10 @@ function showDetails(personId, computeData){
 }
 
 // ------------------ UI actions ------------------
-document.getElementById('calcAll').onclick = ()=>{ renderResults(); alert('Подсчёт выполнен'); };
-document.getElementById('loadSample').onclick = ()=>{ loadSampleData(); saveState(); renderAll(); alert('Пример загружен'); };
-document.getElementById('clearLocal').onclick = ()=>{ if(confirm('Очистить localStorage (absenceData)?')){ localStorage.removeItem(STORAGE_KEY); state={people:[]}; selectedPersonId=null; renderAll(); } };
+// wire translated alerts/labels
+document.getElementById('calcAll').onclick = ()=>{ renderResults(); alert(t('alerts.calcDone')); };
+document.getElementById('loadSample').onclick = ()=>{ loadSampleData(); saveState(); renderAll(); alert(t('alerts.sampleLoaded')); };
+document.getElementById('clearLocal').onclick = ()=>{ if(confirm(t('alerts.clearConfirm'))){ localStorage.removeItem(STORAGE_KEY); state={people:[]}; selectedPersonId=null; renderAll(); } };
 document.getElementById('exportJson').onclick = ()=>{ exportJson(); };
 document.getElementById('importJsonBtn').onclick = ()=>{ document.getElementById('importJsonFile').click(); };
 document.getElementById('importJsonFile').onchange = (ev)=>{ const f = ev.target.files[0]; if(f) importJson(f); ev.target.value = ''; };
@@ -256,7 +196,7 @@ document.getElementById('importJsonFile').onchange = (ev)=>{ const f = ev.target
 // add person
 document.getElementById('addPerson').onclick = ()=>{
   const name = document.getElementById('newPersonName').value.trim();
-  if(!name){ alert('Введите имя'); return; }
+  if(!name){ alert(t('alerts.enterName')); return; }
   const p = { id: uid('p'), name, trips: [] };
   state.people.push(p);
   saveState();
@@ -268,12 +208,12 @@ document.getElementById('addPerson').onclick = ()=>{
 // add trip for selected person
 document.getElementById('addTrip').onclick = ()=>{
   const person = state.people.find(x=>x.id===selectedPersonId);
-  if(!person){ alert('Выберите человека'); return; }
+  if(!person){ alert(t('alerts.choosePerson')); return; }
   const exit = document.getElementById('tripExit').value;
   const ret = document.getElementById('tripReturn').value;
   const note = document.getElementById('tripNote').value.trim();
-  if(!exit){ alert('Укажите дату выезда'); return; }
-  if(ret && parseISO(ret) && parseISO(ret) < parseISO(exit)){ alert('Дата возврата раньше выезда'); return; }
+  if(!exit){ alert(t('alerts.enterExitDate')); return; }
+  if(ret && parseISO(ret) && parseISO(ret) < parseISO(exit)){ alert(t('alerts.returnBeforeExit')); return; }
   const trip = { id: uid('t'), exit: exit, return: ret || null, note: note || '' };
   person.trips = person.trips || [];
   person.trips.push(trip);
@@ -285,8 +225,8 @@ document.getElementById('addTrip').onclick = ()=>{
 // merge trips for selected person (merge overlapping/adjacent)
 document.getElementById('mergeTrips').onclick = ()=>{
   const person = state.people.find(x=>x.id===selectedPersonId);
-  if(!person){ alert('Выберите человека'); return; }
-  if(!person.trips || person.trips.length<=1){ alert('Нет пересечений'); return; }
+  if(!person){ alert(t('alerts.choosePerson')); return; }
+  if(!person.trips || person.trips.length<=1){ alert(t('noIntersections')); return; }
 
   // build intervals with exclusive end (endExclusive) representation
   const msPerDay = 86400000;
@@ -341,50 +281,10 @@ document.getElementById('mergeTrips').onclick = ()=>{
   person.trips = newTrips;
   saveState();
   renderTripsForSelected();
-  alert('Поездки объединены');
+  alert(t('mergeTripsDone'));
 };
 
-// ------------------ sample data ------------------
-function loadSampleData(){
-  state = {
-    people: [
-      {
-        id: uid('p'), name: 'Иван Иванов',
-        trips: [
-          { id: uid('t'), exit: '2021-01-05', return: '2021-02-01', note: 'Зимняя командировка' },
-          { id: uid('t'), exit: '2022-12-20', return: null, note: 'Долгая поездка (ещё не вернулся)' }
-        ]
-      },
-      {
-        id: uid('p'), name: 'Мария Петрова',
-        trips: [
-          { id: uid('t'), exit: '2020-06-10', return: '2020-06-20', note: '' },
-          { id: uid('t'), exit: '2020-06-18', return: '2020-07-05', note: 'пересекающаяся' },
-          { id: uid('t'), exit: '2023-03-01', return: '2023-03-10', note: '' }
-        ]
-      },
-      {
-        id: uid('p'), name: 'Алексей Смирнов',
-        trips: [
-          { id: uid('t'), exit: '2019-11-01', return: '2019-11-30', note: '' },
-          { id: uid('t'), exit: '2024-09-15', return: '2024-09-20', note: '' }
-        ]
-      }
-    ]
-  };
-  // defaults for date inputs
-  const today = new Date();
-  const isoToday = isoDate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())));
-  document.getElementById('date1').value = isoToday;
-  const fiveYearsAgo = new Date(Date.UTC(today.getUTCFullYear()-5, today.getUTCMonth(), today.getUTCDate()));
-  document.getElementById('date2').value = isoDate(fiveYearsAgo);
-  document.getElementById('includeReturn').checked = false;
-  saveState();
-}
-
-// ------------------ import/export (already above) ------------------
-
-// ------------------ S3 optional UI (simple) ------------------
+// S3 buttons use translated messages inside addS3Panel
 (function addS3Panel(){
   const controls = document.querySelector('.controls');
   if(!controls) return;
@@ -394,22 +294,22 @@ function loadSampleData(){
   panel.style.flexDirection = 'column';
   panel.style.gap = '6px';
   panel.innerHTML = `
-    <label style="font-size:13px;color:#6b7280;margin:0">S3 (опционально) — presigned URLs</label>
+    <label style="font-size:13px;color:#6b7280;margin:0">${t('s3Label')}</label>
     <div style="display:flex;gap:8px;align-items:center">
-      <input id="s3PutUrl" type="text" placeholder="PUT URL (presigned)" style="flex:1" />
-      <button id="s3Save" class="ghost">Сохранить в S3</button>
+      <input id="s3PutUrl" type="text" placeholder="${t('s3PutPlaceholder')}" style="flex:1" />
+      <button id="s3Save" class="ghost">S3 PUT</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <input id="s3GetUrl" type="text" placeholder="GET URL (presigned)" style="flex:1" />
-      <button id="s3Load" class="ghost">Загрузить из S3</button>
+      <input id="s3GetUrl" type="text" placeholder="${t('s3GetPlaceholder')}" style="flex:1" />
+      <button id="s3Load" class="ghost">S3 GET</button>
     </div>
-    <div class="muted small">Если у вас есть presigned PUT/GET URL — можно сохранять и загружать JSON прямо в бакет.</div>
+    <div class="muted small">${t('s3Label')}</div>
   `;
   controls.appendChild(panel);
 
   document.getElementById('s3Save').onclick = async ()=>{
     const url = document.getElementById('s3PutUrl').value.trim();
-    if(!url) return alert('Вставьте presigned PUT URL');
+    if(!url) return alert(t('s3PutMissing'));
     try{
       const res = await fetch(url, {
         method: 'PUT',
@@ -417,19 +317,19 @@ function loadSampleData(){
         body: JSON.stringify(state, null, 2)
       });
       if(!res.ok) throw new Error('HTTP '+res.status);
-      alert('Сохранено в S3');
-    }catch(err){ alert('Ошибка при сохранении в S3: '+err.message); }
+      alert(t('s3SaveOk'));
+    }catch(err){ alert(t('s3SaveError') + err.message); }
   };
   document.getElementById('s3Load').onclick = async ()=>{
     const url = document.getElementById('s3GetUrl').value.trim();
-    if(!url) return alert('Вставьте presigned GET URL');
+    if(!url) return alert(t('s3GetError'));
     try{
       const res = await fetch(url);
       if(!res.ok) throw new Error('HTTP '+res.status);
       const parsed = await res.json();
-      if(parsed && parsed.people){ state = parsed; saveState(); renderAll(); alert('Загружено из S3'); }
-      else alert('Неправильный формат JSON в S3');
-    }catch(err){ alert('Ошибка при загрузке из S3: '+err.message); }
+      if(parsed && parsed.people){ state = parsed; saveState(); renderAll(); alert(t('alerts.importDone')); }
+      else alert(t('alerts.importBadFormat'));
+    }catch(err){ alert(t('s3LoadError') + err.message); }
   };
 })();
 

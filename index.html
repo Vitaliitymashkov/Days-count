@@ -1,58 +1,69 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Учёт отсутствий в Польше — absence-tracker</title>
+  <title>Absence tracker — Poland</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="container">
     <header>
       <div style="display:flex;flex-direction:column">
-        <h1>Учёт отсутствий в Польше</h1>
-        <span class="muted">Добавляйте поездки, указывайте период расчёта — программа посчитает суммарные дни отсутствия.</span>
+        <h1 id="appTitle">Absence tracker — Poland</h1>
+        <span id="appSubtitle" class="muted">Add trips, set calculation period — the app will count total absent days.</span>
       </div>
-      <div style="margin-left:auto" class="pill">Файл: <strong>index.html</strong></div>
+
+      <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+        <div class="pill" id="filePill">File: <strong>index.html</strong></div>
+
+        <!-- Language switch -->
+        <label for="langSelect" class="muted small" style="margin:0">
+          <select id="langSelect" aria-label="Language">
+            <option value="en">English</option>
+            <option value="pl">Polski</option>
+          </select>
+        </label>
+      </div>
     </header>
 
     <div class="grid">
       <!-- Left: main controls -->
       <div>
         <div class="card">
-          <h3>Параметры периода</h3>
+          <h3 id="periodTitle">Period parameters</h3>
           <div style="display:flex;gap:8px;margin-top:8px">
             <div style="flex:1">
-              <label>Дата 1 — конечная (date1)</label>
+              <label id="date1Label">Date 1 — End (date1)</label>
               <input id="date1" type="date" />
             </div>
             <div style="width:220px">
-              <label>Дата 2 — начальная (date2)</label>
+              <label id="date2Label">Date 2 — Start (date2)</label>
               <input id="date2" type="date" />
             </div>
           </div>
           <div style="margin-top:8px" class="row">
-            <label style="margin:0;flex:1"><input id="includeReturn" type="checkbox" checked /> &nbsp; Считать день возвращения <span class="muted">(если включено — день возврата считается отсутствующим)</span></label>
+            <label style="margin:0;flex:1"><input id="includeReturn" type="checkbox" /> &nbsp; <span id="includeReturnLabel">Count return day</span> <span class="muted" id="includeReturnHint">(if enabled — return day counts as absent)</span></label>
           </div>
 
           <div style="margin-top:10px" class="controls">
-            <button id="calcAll">Посчитать для всех</button>
-            <button id="loadSample" class="ghost">Загрузить пример</button>
-            <button id="clearLocal" class="ghost">Очистить localStorage</button>
-            <button id="exportJson" class="ghost">Экспорт JSON</button>
-            <button id="importJsonBtn" class="ghost">Импорт JSON</button>
+            <button id="calcAll">Calculate for all</button>
+            <button id="loadSample" class="ghost">Load sample</button>
+            <button id="clearLocal" class="ghost">Clear localStorage</button>
+            <button id="exportJson" class="ghost">Export JSON</button>
+            <button id="importJsonBtn" class="ghost">Import JSON</button>
           </div>
 
-          <div class="note">Правило подсчёта: поездка — период с даты выезда (включительно) до даты возвращения (обычно возвращение НЕ учитывается, но опция выше может включить).</div>
+          <div class="note" id="ruleNote">Rule: trip is period from exit date (inclusive) to return date (return is usually NOT counted, but option may include it).</div>
         </div>
 
         <div class="card" style="margin-top:12px">
-          <h3>Результаты</h3>
+          <h3 id="resultsHeading">Results</h3>
           <div id="results"></div>
         </div>
 
         <div class="card" style="margin-top:12px">
-          <h3>Детализация поездки</h3>
+          <h3 id="detailsHeading">Trip details</h3>
           <div id="details"></div>
         </div>
 
@@ -61,41 +72,41 @@
       <!-- Right: people and trips -->
       <div>
         <div class="card">
-          <h3>Люди</h3>
+          <h3 id="peopleHeading">People</h3>
           <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-            <input id="newPersonName" type="text" placeholder="Имя (напр. Иван Иванов)" />
-            <button id="addPerson">Добавить</button>
+            <input id="newPersonName" type="text" placeholder="Name (e.g. John Doe)" />
+            <button id="addPerson">Add</button>
           </div>
           <div class="people-list" id="peopleList"></div>
         </div>
 
         <div class="card" style="margin-top:12px">
-          <h3>Поездки выбранного человека</h3>
-          <div id="personHeader" class="muted small">Выберите человека слева</div>
+          <h3 id="personTripsHeading">Selected person's trips</h3>
+          <div id="personHeader" class="muted small">Select a person on the left</div>
 
           <div id="tripsArea" style="display:none;margin-top:8px">
             <table class="trips-table" id="tripsTable">
-              <thead><tr><th>Выезд</th><th>Въезд</th><th>Заметка</th><th></th></tr></thead>
+              <thead><tr><th id="thExit">Exit</th><th id="thReturn">Return</th><th id="thNote">Note</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
 
             <div style="margin-top:8px">
-              <label>Новая поездка</label>
+              <label id="newTripLabel">New trip</label>
               <div style="display:flex;gap:8px">
                 <input id="tripExit" type="date" />
                 <input id="tripReturn" type="date" />
               </div>
-              <input id="tripNote" type="text" placeholder="Заметка (опционально)" style="margin-top:8px" />
+              <input id="tripNote" type="text" placeholder="Note (optional)" style="margin-top:8px" />
               <div style="display:flex;gap:8px;margin-top:8px">
-                <button id="addTrip">Добавить поездку</button>
-                <button id="mergeTrips" class="ghost">Объединить пересечения</button>
+                <button id="addTrip">Add trip</button>
+                <button id="mergeTrips" class="ghost">Merge overlaps</button>
               </div>
             </div>
           </div>
         </div>
 
         <footer>
-          <div class="muted">Данные хранятся в localStorage (ключ <code>absenceData</code>). Экспорт/импорт — JSON.</div>
+          <div class="muted" id="footerNote">Data is stored in localStorage (key <code>absenceData</code>). Export/import — JSON.</div>
         </footer>
       </div>
     </div>
