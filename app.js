@@ -2,33 +2,65 @@
 function uid(prefix='id'){return prefix+'-'+Math.random().toString(36).slice(2,11)}
 function parseISO(dateStr){ if(!dateStr) return null; const [y,m,d]=dateStr.split('-').map(Number); return new Date(Date.UTC(y,m-1,d)); }
 function isoDate(dt){ if(!dt) return null; if(typeof dt==='string') return dt; const y=dt.getUTCFullYear(); const m=String(dt.getUTCMonth()+1).padStart(2,'0'); const d=String(dt.getUTCDate()).padStart(2,'0'); return `${y}-${m}-${d}` }
-function daysBetweenUTC(a,b){ // number of days from date a (inclusive) to date b (exclusive)
-  const msPerDay=86400000;
-  return Math.round((Date.UTC(b.getUTCFullYear(),b.getUTCMonth(),b.getUTCDate()) - Date.UTC(a.getUTCFullYear(),a.getUTCMonth(),a.getUTCDate()))/msPerDay);
-}
 
-// Merge overlapping or adjacent intervals (array of [startDateObj, endDateObj])
-function mergeIntervals(intervals){
-  if(!intervals || intervals.length===0) return [];
-  // sort by start
-  intervals.sort((x,y)=>Date.UTC(x[0].getUTCFullYear(),x[0].getUTCMonth(),x[0].getUTCDate()) - Date.UTC(y[0].getUTCFullYear(),y[0].getUTCMonth(),y[0].getUTCDate()));
-  const res=[];
-  let [curS,curE]=[intervals[0][0],intervals[0][1]];
-  for(let i=1;i<intervals.length;i++){
-    const [s,e]=intervals[i];
-    // if s <= curE (overlap) or s is exactly curE (adjacent) -> merge
-    if(Date.UTC(s.getUTCFullYear(),s.getUTCMonth(),s.getUTCDate()) <= Date.UTC(curE.getUTCFullYear(),curE.getUTCMonth(),curE.getUTCDate())){
-      // extend curE to max(curE,e)
-      if(Date.UTC(e.getUTCFullYear(),e.getUTCMonth(),e.getUTCDate()) > Date.UTC(curE.getUTCFullYear(),curE.getUTCMonth(),curE.getUTCDate())){
-        curE = e;
-      }
-    } else {
-      res.push([curS,curE]);
-      curS = s; curE = e;
-    }
-  }
-  res.push([curS,curE]);
-  return res;
+// Provide a safe fallback translation function `t` if none is defined.
+// This avoids "ReferenceError: t is not defined" when the app runs without the i18n layer.
+if(typeof window.t !== 'function'){
+  window.t = function(key, params){
+    const map = {
+      // S3 / import/export
+      's3Label': 'S3 storage',
+      's3PutPlaceholder': 'PUT URL',
+      's3GetPlaceholder': 'GET URL',
+      's3PutMissing': 'Enter S3 PUT URL',
+      's3SaveOk': 'Saved to S3',
+      's3SaveError': 'S3 save error: ',
+      's3GetError': 'Enter S3 GET URL',
+      's3LoadError': 'S3 load error: ',
+      // Alerts / buttons / headings used in this file
+      'alerts.importDone': 'Import done',
+      'alerts.importBadFormat': 'Bad format',
+      'alerts.calcDone': 'Calculation done',
+      'alerts.sampleLoaded': 'Sample loaded',
+      'alerts.enterName': 'Enter name',
+      'alerts.deletePersonConfirm': 'Delete person?',
+      'alerts.clearConfirm': 'Clear local data?',
+      'alerts.choosePerson': 'Choose a person',
+      'alerts.enterExitDate': 'Enter exit date',
+      'alerts.returnBeforeExit': 'Return date is before exit',
+      'mergeTripsDone': 'Merge completed',
+      'noIntersections': 'No intersections to merge',
+      'personHeaderChoose': 'Choose person',
+      'btns.select': 'Select',
+      'btns.edit': 'Edit',
+      'btns.delete': 'Delete',
+      'btns.editShort': 'Edit',
+      'btns.delShort': 'Del',
+      'btns.show': 'Show',
+      // table headers placeholders (if used)
+      'tableHeaders': ['Name','Days','Details'],
+      // details tables
+      'details.totalDays': 'Total days',
+      'details.mergedIntervalsTitle': 'Merged intervals',
+      'details.columnsMerged.0': 'Start',
+      'details.columnsMerged.1': 'End',
+      'details.columnsMerged.2': 'Days',
+      'details.perTripTitle': 'Per trip contribution',
+      'details.columnsPerTrip.0': 'Exit',
+      'details.columnsPerTrip.1': 'Return',
+      'details.columnsPerTrip.2': 'Range',
+      'details.columnsPerTrip.3': 'Days',
+      'details.columnsPerTrip.4': 'Note',
+      'peopleHeading': 'People',
+      'thReturn': 'Return'
+    };
+    if(typeof key !== 'string') return '';
+    if(map.hasOwnProperty(key)) return map[key];
+    // if key looks like an array (e.g. 'tableHeaders') stored as array -> return it
+    // but for unknown keys, return last segment or the key itself
+    const parts = key.split('.');
+    return parts[parts.length-1] || key;
+  };
 }
 
 // ------------------ Data handling ------------------
@@ -36,8 +68,16 @@ const STORAGE_KEY = 'absenceData';
 let state = { people: [] };
 let selectedPersonId = null;
 
-function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); renderPeopleList(); }
-function loadState(){ const raw = localStorage.getItem(STORAGE_KEY); if(raw){ try{ state = JSON.parse(raw); }catch(e){ console.error('parse err',e); state={people:[]}; } } else { state={people:[]}; } }
+function saveState(){ 
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); 
+  console.log('saveState: saved state', state);
+  renderPeopleList(); 
+}
+function loadState(){ 
+  const raw = localStorage.getItem(STORAGE_KEY); 
+  console.log('loadState: raw from localStorage', raw);
+  if(raw){ try{ state = JSON.parse(raw); console.log('loadState: parsed state', state); }catch(e){ console.error('parse err',e); state={people:[]}; } } else { state={people:[]}; console.log('loadState: no state found, using default'); } 
+}
 
 function exportJson(){ const dataStr = JSON.stringify(state,null,2); const blob = new Blob([dataStr],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='absence-data.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 
@@ -286,6 +326,7 @@ document.getElementById('mergeTrips').onclick = ()=>{
 
 // S3 buttons use translated messages inside addS3Panel
 (function addS3Panel(){
+  console.log('addS3Panel: initializing S3 panel (if controls exist)');
   const controls = document.querySelector('.controls');
   if(!controls) return;
   const panel = document.createElement('div');
@@ -332,9 +373,10 @@ document.getElementById('mergeTrips').onclick = ()=>{
     }catch(err){ alert(t('s3LoadError') + err.message); }
   };
 })();
-
+  
 // ------------------ initial load ------------------
 (function init(){
+  console.log('init: start');
   // set default dates if empty
   const today = new Date();
   const isoToday = isoDate(new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())));
@@ -347,4 +389,7 @@ document.getElementById('mergeTrips').onclick = ()=>{
   }
   // load saved data and render UI
   loadState();
+  console.log('init: state loaded, rendering UI');
+  renderAll();
 })();
+console.log('app.js: script loaded');
