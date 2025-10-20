@@ -1,126 +1,124 @@
-Промпт (спецификация) для генератора кода: SPA на JavaScript для учёта дней отсутствия в Польше
+Prompt (spec) for a code generator: SPA in JavaScript to track days absent in Poland
 
-Ниже — готовый промпт, который можно вставить в генератор кода/попросить разработчика/использовать с ChatGPT, чтобы получить рабочую одностраничную веб-программу. Приложение должно запускаться как статический сайт (GitHub Pages) без бэкенда; опция хранения данных — localStorage по умолчанию и необязательная интеграция с S3 (описана отдельно).
+Below is a ready prompt that can be pasted into a code generator / sent to a developer / used with ChatGPT to produce a working single-page web app. The application must run as a static site (GitHub Pages) without a backend; default data storage is localStorage and optional S3 integration is described separately.
 
-Скопируй весь блок ниже и вставь в генератор кода (или отправь разработчику).
+Copy the entire block below and paste it into the code generator (or send to a developer).
 '''
-Задача
+Task
 ---
-Создай одностраничное веб-приложение (single-page app) на чистом JavaScript (без сборщика / без backend), которое может работать как статический сайт (разместить на GitHub Pages). Приложение позволяет вести учёт поездок людей (выезд из Польши и въезд в Польшу), хранить несколько людей и их поездок и вычислять суммарное количество дней отсутствия в Польше за заданный период.
+Create a single-page web application (SPA) using plain JavaScript (no bundler / no backend) that can be hosted as a static site (for example on GitHub Pages). The app should allow tracking people's trips (exit from Poland and return to Poland), store multiple people and their trips, and compute the total number of absent days in Poland for a given period.
 
-Требования по реализации
+Implementation requirements
 ---
-1. Технологии:
-   - Чистый HTML + CSS + vanilla JavaScript (ES6+). Проект — один файл `index.html` (можно разделить на файлы, но должен быть runnable без сборки).
-   - Использовать семплый, аккуратный интерфейс (можно Tailwind CDN, но не обязательно).
-   - Нет авторизации.
+1. Technologies:
+   - Plain HTML + CSS + vanilla JavaScript (ES6+). The project may be split into files, but it must be runnable without a build step.
+   - Use a simple, tidy UI (Tailwind CDN allowed but not required).
+   - No authentication.
 
-2. Хранение данных:
-   - По умолчанию — `localStorage` (ключ: `absenceData`).
-   - Предусмотреть кнопки: «Сохранить», «Загрузить», «Экспорт JSON», «Импорт JSON».
-   - Опциональная секция: подключение к AWS S3 (описать примерную интеграцию через presigned URL или инструкцию по ручной загрузке JSON в бакет). Реализация S3 не обязательна, но в интерфейсе должна быть переключаемая опция «Хранить в S3 (опция)» с полями: `S3 PUT URL` / `S3 GET URL` (пользователь может вставить свой presigned URL).
+2. Data storage:
+   - Default: localStorage (key: `absenceData`).
+   - Provide buttons: "Save", "Load", "Export JSON", "Import JSON".
+   - Optional section: AWS S3 integration (describe example integration via presigned URLs or instructions for manual JSON upload to a bucket). S3 implementation is optional, but the UI should include a toggle/section "Store in S3 (optional)" with fields: `S3 PUT URL` / `S3 GET URL` (the user may paste their presigned URL).
 
-3. Данные / модель:
-   - Структура данных (пример JSON):
+3. Data model:
+   - Example JSON structure:
      ```json
      {
        "people": [
          {
            "id": "uuid-1",
-           "name": "Иван Иванов",
+           "name": "Ivan Ivanov",
            "trips": [
              {"id":"t1","exit":"2022-03-10","return":"2022-04-05"},
-             {"id":"t2","exit":"2023-01-15","return":null} // null — ещё не вернулся
+             {"id":"t2","exit":"2023-01-15","return":null} // null — not yet returned
            ]
          }
        ]
      }
      ```
-   - Даты в формате ISO `YYYY-MM-DD`.
-   - При подсчётах, если `return` == `null`, считать, что дата возврата = выбранная `date1` (верхняя граница интервала).
+   - Dates in ISO format `YYYY-MM-DD`.
+   - If a trip's `return` == `null`, treat the return date as the selected `date1` (the upper bound of the calculation period) when computing.
 
-4. Интерфейс (минимум):
-   - Панель «Параметры периода»: `Дата 1 (end)` — по умолчанию = сегодня; `Дата 2 (start)` — по умолчанию = дата1 минус 5 лет. Поля редактируемые.
-   - Список людей: добавить/редактировать/удалить человека.
-   - Для каждого человека — список поездок с возможностью добавить/редактировать/удалить запись (поля: `Дата выезда` (exit), `Дата въезда` (return), заметка).
-   - Кнопка «Посчитать отсутствия» для выбранного человека или «Посчитать для всех».
-   - Результат: таблица с каждым человеком, суммарные дни отсутствия за период, и детализация поездок (какие периоды вошли в расчёт и сколько дней добавил каждый).
-   - Кнопка «Очистить локально» (удалить localStorage).
+4. Minimum UI:
+   - "Period parameters" panel: `Date 1 (end)` — default = today; `Date 2 (start)` — default = date1 minus 5 years. Fields editable.
+   - List of people: add / edit / delete a person.
+   - For each person: list of trips with add / edit / delete (fields: `exit date`, `return date`, note).
+   - Button "Calculate absences" for a selected person and "Calculate for all".
+   - Results: table with each person, total absent days for the period, and per-trip detail (which periods were counted and how many days each contributed).
+   - Button "Clear local" to remove localStorage key.
 
-5. Алгоритм расчёта дней отсутствия
-   - Определения:
-     - Интервал расчёта: `[start = date2, end = date1]` (включительно по логике — см. ниже).
-     - Каждая поездка — период `[exit, return)` (exit включительно, return — день возвращения считаем в Польше; т.е. если выезд 2022-03-01, возврат 2022-03-05 — absent days = 4: 1,2,3,4). Это правило описать в UI. (Если пользователь предпочитает считать иначе — сделать опцию).
-   - Для каждой поездки вычислить пересечение с интервалом `[start, end]`:
+5. Absence counting algorithm
+   - Definitions:
+     - Calculation interval: `[start = date2, end = date1]` (see inclusive/exclusive rules below).
+     - Each trip is represented as `[exit, return)` (exit inclusive; return day is counted as being in Poland — i.e. if exit 2022-03-01 and return 2022-03-05, absent days = 4: 1,2,3,4). Display this rule in the UI. (If users want a different rule — provide an option.)
+   - For each trip compute the intersection with `[start, end]`:
      - effective_start = max(exit, start)
-     - effective_end = min(return_or_date1, end + 1 day)  // если считаем return как день возвращения в Польше, то не включаем этот день
+     - effective_end = min(return_or_date1, end + 1 day)  // if return day is considered as returned to Poland then we do not include that day
      - days = max(0, (effective_end - effective_start) in days)
-   - Чтобы избежать двойного счёта при наложении поездок — объединять (merge) все пересекающиеся/смежные интервалы по этому человеку внутри расчётного интервала, затем суммировать длину объединённых интервалов.
-   - Все вычисления дат делать на уровне календарных дней (использовать объект `Date` и считать разницу в миллисекундах, делённую на 86400000, округлять по правилам: взять целое число дней от дат без временной зоны, работать в UTC или использовать `Date.UTC(year, month-1, day)` для безопасного исчисления).
+   - To avoid double counting when trips overlap — merge (union) all overlapping/adjacent intervals per person within the calculation period, then sum the lengths of the merged intervals.
+   - Perform calendar-day computations (use Date objects and compute difference in milliseconds divided by 86400000). Work in UTC or use `Date.UTC(year, month-1, day)` to avoid timezone issues.
 
-6. Доп. функциональность:
-   - Возможность указать правило подсчёта: «возвращение включать/не включать» (т.е. считать день возвращения как отсутствующий или нет).
-   - Фильтр по человеку и кнопка «История поездок» (мелкая табличка).
-   - Визуальная подсветка пересекающихся поездок.
+6. Additional functionality:
+   - Option to set counting rule: "include return day / do not include return day" (i.e. whether the return day is counted as absent).
+   - Filter by person and a button "Trip history" (small table).
+   - Visual highlight of overlapping trips.
 
-7. Тестовые данные: дать в интерфейсе кнопку «Загрузить пример», которая подставляет 3 человека с несколькими поездками (включая пересекающиеся и незавершённые поездки).
-8. Доступность/локализация: интерфейс на русском языке.
+7. Sample data: include a "Load sample" button that inserts 3 people with multiple trips (including overlapping and open-ended trips).
 
-UI/UX замечания
+8. Accessibility / localization: UI in Russian (original spec). [Note: can be localized — add language switch if desired.]
+
+UI/UX notes
 ---
-- Простая, понятная форма — не перегружать.
-- В результатах показать две вещи: (1) суммарные дни за интервал, (2) разбивка по поездкам (какие даты учтены и сколько дней).
-- Обязательно показать, какие правила подсчёта используются (например: дата включительно/исключительно).
+- Keep the form simple and clear.
+- Results should show two things: (1) total days in the interval, (2) breakdown by trips (which dates were counted and how many days).
+- Show the counting rules used (e.g. inclusive/exclusive days).
 
-Деплой на GitHub Pages (инструкции для конечного пользователя)
+Deploy to GitHub Pages (user instructions)
 ---
-1. Создать публичный репозиторий `username/absence-tracker`.
-2. Положить `index.html` (и при необходимости `style.css`, `app.js`) в корень ветки `main`.
-3. Включить GitHub Pages: `Settings → Pages → branch: main / / (root)`.
-4. Адрес станет `https://username.github.io/absence-tracker/`.
+1. Create a public repository `username/absence-tracker`.
+2. Put `index.html` (and optionally `styles.css`, `app.js`) in the repository root of the `main` branch.
+3. Enable GitHub Pages: Settings → Pages → branch: main / (root).
+4. The site will be available at `https://username.github.io/absence-tracker/`.
 
-Опционально: хранение в S3 (короткая инструкция)
+Optional: S3 storage (short instructions)
 ---
-- Статический сайт: можно размещать в S3 как статический сайт, но для записи в бакет из браузера нужно использовать presigned PUT URL или настроить backend (Lambda) для подписи.
-- Для простоты можно экспортировать JSON локально и вручную залить в S3 (или хранить публичный JSON и загружать его).
-- Если нужен пример функции для получения presigned URL — приложить пример на Node.js (AWS SDK v3) — но реализация presign не входит в основной минимальный функционал.
+- The static site can be hosted in an S3 bucket, but to write to a bucket from the browser you will need presigned PUT URLs or a backend (Lambda) to sign requests.
+- For simplicity, users can export JSON locally and upload it manually to S3 (or keep a public JSON and load it).
+- If needed, provide an example snippet (Node.js, AWS SDK v3) to obtain presigned URLs; presigning itself is outside the minimal required functionality.
 
-Примеры входных/выходных данных (пример)
+Input / output examples
 ---
-Вход (период):
+Input (period):
 - date1 = 2025-10-18
 - date2 = 2020-10-18
 
-Человек A:
+Person A:
 - trip1: exit=2021-01-05, return=2021-02-01
-- trip2: exit=2022-12-20, return=null (ещё не вернулся)
+- trip2: exit=2022-12-20, return=null (not yet returned)
 
-Ожидаемый результат:
-- Для trip1: учитываются дни с 2021-01-05 по 2021-01-31 включительно = 27 дней (если return день исключаем)
-- Для trip2: учитываем до date1 (2025-10-18) — дни с 2022-12-20 по 2025-10-17 = N дней
-- Сумма = 27 + N (при условии объединения пересечений).
+Expected result:
+- For trip1: count days from 2021-01-05 to 2021-01-31 inclusive = 27 days (if return day is excluded)
+- For trip2: count up to date1 (2025-10-18) — days from 2022-12-20 to 2025-10-17 = N days
+- Total = 27 + N (after merging overlaps if any).
 
-Критерии приёмки (acceptance)
+Acceptance criteria
 ---
-- Приложение запускается на локальном файле `index.html` и работает в современных браузерах.
-- Можно добавить/удалить людей и поездки и получить корректный подсчёт.
-- Результат теста на примерах совпадает с ручным расчётом (предоставить 3 тестовых кейса).
-- Данные сохраняются в `localStorage` и экспортируются/импортируются в JSON.
+- The app runs by opening the local `index.html` and works in modern browsers.
+- You can add/delete people and trips and obtain correct calculations.
+- Results on sample cases match manual computation (provide 3 test cases).
+- Data is saved in `localStorage` and export/import via JSON is supported.
 
-Пожелания к коду (стиль и комментарии)
+Code/style requests
 ---
-- Код читаемый, с комментариями в местах, где делается объединение интервалов и вычисление дней.
-- Обработать граничные случаи: поездка полностью вне интервала (игнорировать), поездка пересекает границы.
-- UX сообщения об ошибках: некорректные даты, return < exit — предупреждение.
+- Code should be readable, with comments where intervals are merged and days are computed.
+- Handle edge cases: trips completely outside the period (ignore), trips overlapping the boundaries.
+- Provide user-friendly error messages for invalid dates (return < exit, etc.).
 
-Конец промпта
+End of prompt
 ---
-'''
 
-⸻
+If you want, I can:
+  1. Generate a ready-to-run index.html (vanilla JS) based on this prompt here — a file you can deploy to GitHub Pages.
+  2. Or prepare short commands and a sample Node.js presign snippet for uploading JSON to S3.
 
-Если хочешь, могу:
-	1.	На основе этого промпта сразу сгенерировать готовый index.html (vanilla JS) прямо здесь — файл, который можно залить на GitHub Pages.
-	2.	Или подготовить краткие команды и пример presigned URL Node.js snippet для загрузки JSON в S3.
-
-Что предпочитаешь?
+Which do
