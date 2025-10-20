@@ -117,8 +117,7 @@ Code/style requests
 End of prompt
 ---
 
-If you want, I can:
+:
   1. Generate a ready-to-run index.html (vanilla JS) based on this prompt here — a file you can deploy to GitHub Pages.
   2. Or prepare short commands and a sample Node.js presign snippet for uploading JSON to S3.
 
-Which do
